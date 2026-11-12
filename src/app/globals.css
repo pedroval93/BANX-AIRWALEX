@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/* Paleta: papel frío, tinta azul, tarjeta azul petróleo con latón. */
+:root {
+  --paper: #edf0f2;
+  --surface: #f8f9fa;
+  --ink: #14202b;
+  --muted: #5b6b78;
+  --line: #d3d9de;
+  --accent: #1f6f8b;
+  --accent-ink: #ffffff;
+  --card: #1e3a4c;
+  --card-line: #2f5a70;
+  --brass: #c9a227;
+  --credit: #2e7d5b;
+  --danger: #b3412e;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-card: var(--card);
+  --color-card-line: var(--card-line);
+  --color-brass: var(--brass);
+  --color-credit: var(--credit);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-digits);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0f171e;
+    --surface: #16212a;
+    --ink: #e6ecf0;
+    --muted: #93a3af;
+    --line: #26343f;
+    --accent: #5fb3cf;
+    --accent-ink: #0f171e;
+    --credit: #6cc39b;
+    --danger: #e98a77;
+  }
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tarjeta: volteo 3D. */
+.card-scene {
+  perspective: 1400px;
+}
+.card-flipper {
+  transform-style: preserve-3d;
+  transition: transform 600ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.card-flipper[data-flipped="true"] {
+  transform: rotateY(180deg);
+}
+.card-face {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.card-back {
+  transform: rotateY(180deg);
+}
+
+/* Trama de seguridad tipo billete (guilloché) sobre la tarjeta. */
+.card-guilloche {
+  background-color: var(--card);
+  background-image:
+    repeating-radial-gradient(
+      circle at 110% 120%,
+      transparent 0 10px,
+      color-mix(in srgb, var(--card-line) 70%, transparent) 10px 11px
+    ),
+    repeating-radial-gradient(
+      circle at -20% -40%,
+      transparent 0 14px,
+      color-mix(in srgb, var(--card-line) 45%, transparent) 14px 15px
+    );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-flipper {
+    transition: none;
+  }
+}
