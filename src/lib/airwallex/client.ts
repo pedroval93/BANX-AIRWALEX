@@ -56,7 +56,7 @@ export function createAirwallexClient({
   async function readError(res: Response): Promise<AirwallexError> {
     const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
     return new AirwallexError(
-      body.message ?? `Airwallex respondió ${res.status}`,
+      body.message ?? `El proveedor de tarjetas respondió ${res.status}`,
       res.status,
       body.code,
     );

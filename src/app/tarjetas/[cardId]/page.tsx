@@ -13,6 +13,7 @@ import { primaryLimit } from "@/lib/cards/limits";
 import { summarizeSpend } from "@/lib/cards/spend";
 import { getMyProfile, mainCurrency, userOwnsCard } from "@/lib/data";
 import { monthLabel, monthName, monthRange, parseMonth, shiftMonth } from "@/lib/dates";
+import { permissionsOf } from "@/lib/permissions";
 
 const monthLink =
   "inline-flex min-h-11 items-center gap-1 rounded-lg px-3 text-sm font-medium transition-colors hover:bg-wash";
@@ -26,7 +27,9 @@ export default async function CardPage({ params, searchParams }: PageProps<"/tar
 
   const issuing = getIssuing();
   const profile = await getMyProfile(user.id);
-  const showTransactions = profile?.show_transactions ?? false;
+  const can = permissionsOf(profile);
+  // La columna derecha aparece si puede ver su saldo, sus movimientos o ambos.
+  const showMonth = can.balance || can.transactions;
   const month = parseMonth(typeof mes === "string" ? mes : undefined);
   const currentMonth = parseMonth(undefined);
 
@@ -47,10 +50,10 @@ export default async function CardPage({ params, searchParams }: PageProps<"/tar
   let transactions: CardTransaction[] | null = null;
   let limits: CardLimits | null = null;
   let transactionsError = false;
-  if (showTransactions) {
+  if (showMonth) {
     const [txs, lim] = await Promise.allSettled([
       issuing.listCardTransactions(cardId, monthRange(month)),
-      card.card_status === "CLOSED" ? Promise.resolve(null) : issuing.getCardLimits(cardId),
+      !can.balance || card.card_status === "CLOSED" ? Promise.resolve(null) : issuing.getCardLimits(cardId),
     ]);
     if (txs.status === "fulfilled") transactions = txs.value;
     else transactionsError = true;
@@ -74,7 +77,7 @@ export default async function CardPage({ params, searchParams }: PageProps<"/tar
           <StatusChip status={status} />
         </div>
 
-        <div className={`mt-8 grid gap-12 ${showTransactions ? "lg:grid-cols-[minmax(0,25rem)_minmax(0,1fr)]" : ""}`}>
+        <div className={`mt-8 grid gap-12 ${showMonth ? "lg:grid-cols-[minmax(0,25rem)_minmax(0,1fr)]" : ""}`}>
           <div className="w-full max-w-md">
             <CardVisual
               cardId={cardId}
@@ -85,7 +88,7 @@ export default async function CardPage({ params, searchParams }: PageProps<"/tar
             />
           </div>
 
-          {showTransactions ? (
+          {showMonth ? (
             <section aria-labelledby="movimientos" className="min-w-0">
               <div className="flex items-center justify-between gap-2 border-b border-line pb-3">
                 <Link
@@ -117,22 +120,26 @@ export default async function CardPage({ params, searchParams }: PageProps<"/tar
                 <p className="mt-6 text-muted">No se pudieron traer los movimientos. Intenta de nuevo en un momento.</p>
               ) : (
                 <>
-                  <KpiRow>
-                    <Kpi label="Gastado">
-                      <SpendValue spend={spend} fallbackCurrency={mainCurrency([spend])} />
-                    </Kpi>
-                    {limits ? (
-                      <div>
-                        <dt className="text-sm text-muted">Uso del límite</dt>
-                        <dd className="mt-2">
-                          <LimitBar usage={primaryLimit(limits)} />
-                        </dd>
-                      </div>
-                    ) : null}
-                  </KpiRow>
-                  <div className="mt-8">
-                    <TransactionsList transactions={transactions ?? []} />
-                  </div>
+                  {can.balance ? (
+                    <KpiRow>
+                      <Kpi label="Gastado">
+                        <SpendValue spend={spend} fallbackCurrency={mainCurrency([spend])} />
+                      </Kpi>
+                      {limits ? (
+                        <div>
+                          <dt className="text-sm text-muted">Saldo disponible</dt>
+                          <dd className="mt-2">
+                            <LimitBar usage={primaryLimit(limits)} mode="available" />
+                          </dd>
+                        </div>
+                      ) : null}
+                    </KpiRow>
+                  ) : null}
+                  {can.transactions ? (
+                    <div className="mt-8">
+                      <TransactionsList transactions={transactions ?? []} />
+                    </div>
+                  ) : null}
                 </>
               )}
             </section>

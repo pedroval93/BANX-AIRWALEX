@@ -124,6 +124,46 @@ body {
   opacity: 1;
 }
 
+/* ── Toggle: casilla nativa con forma de interruptor ──────────────── */
+.toggle {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 1.5rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background-color 200ms ease-out;
+}
+.toggle::before {
+  content: "";
+  position: absolute;
+  top: 0.1875rem;
+  left: 0.1875rem;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.toggle:checked {
+  background: var(--accent);
+}
+.toggle:checked::before {
+  transform: translateX(1.25rem);
+}
+.toggle:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* ── Esqueleto mientras llegan los datos de Airwallex ─────────────── */
 .skeleton {
   background: linear-gradient(90deg, var(--line) 0%, var(--wash) 50%, var(--line) 100%);
@@ -143,7 +183,9 @@ body {
   .card-tilt,
   .card-flipper,
   .bar-fill,
-  .dock {
+  .dock,
+  .toggle,
+  .toggle::before {
     transition: none;
   }
   .skeleton {

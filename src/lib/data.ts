@@ -12,7 +12,12 @@ export type Profile = {
   email: string;
   full_name: string | null;
   show_transactions: boolean;
+  /** No existe hasta correr la migración 0002. */
+  show_balance?: boolean | null;
 };
+
+// "*" y no una lista de columnas: así no falla si todavía no existe show_balance.
+const PROFILE_COLUMNS = "*";
 
 // --- Datos del cliente (con su sesión: RLS solo deja ver lo suyo) ---
 
@@ -20,7 +25,7 @@ export async function getMyProfile(userId: string): Promise<Profile | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, show_transactions")
+    .select(PROFILE_COLUMNS)
     .eq("id", userId)
     .maybeSingle();
   if (error) throw new Error(`No se pudo leer el perfil: ${error.message}`);
@@ -56,7 +61,7 @@ export async function listClients(): Promise<ClientRow[]> {
   const [profiles, assignments, users] = await Promise.all([
     admin
       .from("profiles")
-      .select("id, email, full_name, show_transactions, created_at")
+      .select(PROFILE_COLUMNS)
       .order("created_at", { ascending: false }),
     admin.from("card_assignments").select("user_id, airwallex_card_id").order("created_at"),
     admin.auth.admin.listUsers({ perPage: 1000 }),
@@ -73,6 +78,7 @@ export async function listClients(): Promise<ClientRow[]> {
       email: p.email,
       full_name: p.full_name,
       show_transactions: p.show_transactions,
+      show_balance: p.show_balance,
       lastSignInAt: authUser?.last_sign_in_at ?? null,
       invited: !authUser?.last_sign_in_at,
       cardIds: assignments.data.filter((a) => a.user_id === p.id).map((a) => a.airwallex_card_id),
@@ -86,7 +92,7 @@ export async function listAllCards(): Promise<{ cards: AirwallexCard[]; error: s
   } catch (error) {
     return {
       cards: [],
-      error: error instanceof Error ? error.message : "Airwallex no respondió.",
+      error: error instanceof Error ? error.message : "El proveedor de tarjetas no respondió.",
     };
   }
 }

@@ -69,8 +69,7 @@ export function ErrorText({ children }: { children: ReactNode }) {
 export function DemoBanner() {
   return (
     <div className="bg-highlight px-4 py-2 text-center text-sm text-[#2f3b3b]">
-      Modo de prueba: estas tarjetas y movimientos son de ejemplo. Conecta las claves de Airwallex
-      para ver las reales.
+      Modo de prueba: estas tarjetas y movimientos son de ejemplo.
     </div>
   );
 }
@@ -99,18 +98,28 @@ export function StatusChip({ status }: { status: CardStatus | undefined }) {
   );
 }
 
-/** Porcentaje, barra y "6,000.00 USD total". El número va junto a la barra: no depende del color. */
-export function LimitBar({ usage }: { usage: LimitUsage | null }) {
+/**
+ * Porcentaje, barra y monto. El número va junto a la barra: no depende del color.
+ * - "limit" (admin): "68%" y "6,000.00 USD total".
+ * - "available" (cliente): "531.47 USD disponibles" y "de 6,000.00 USD total".
+ */
+export function LimitBar({ usage, mode = "limit" }: { usage: LimitUsage | null; mode?: "limit" | "available" }) {
   if (!usage) return <span className="text-sm text-muted">Sin límite</span>;
   const high = usage.percent >= 90;
+  const total = `${formatAmount(usage.amount, usage.currency)} ${limitIntervalLabel(usage.interval)}`;
   return (
     <div className="min-w-44">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-semibold tabular-nums">{usage.percent}%</span>
-        <span className="truncate text-muted tabular-nums">
-          {formatAmount(usage.amount, usage.currency)} {limitIntervalLabel(usage.interval)}
-        </span>
-      </div>
+      {mode === "available" ? (
+        <div className="flex items-baseline justify-between gap-3 text-sm">
+          <span className="font-semibold tabular-nums">{formatAmount(usage.remaining, usage.currency)} disponibles</span>
+          <span className="truncate text-muted tabular-nums">de {total}</span>
+        </div>
+      ) : (
+        <div className="flex items-baseline justify-between gap-3 text-sm">
+          <span className="font-semibold tabular-nums">{usage.percent}%</span>
+          <span className="truncate text-muted tabular-nums">{total}</span>
+        </div>
+      )}
       <div
         className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line"
         role="meter"

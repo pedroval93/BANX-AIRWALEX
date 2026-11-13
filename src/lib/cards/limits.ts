@@ -5,6 +5,8 @@ export type LimitUsage = {
   interval: LimitInterval;
   amount: number;
   used: number;
+  /** Lo que queda: el saldo disponible. */
+  remaining: number;
   /** 0 a 100, redondeado. */
   percent: number;
 };
@@ -24,6 +26,7 @@ export function primaryLimit(limits: CardLimits | null | undefined): LimitUsage 
     interval: limit.interval,
     amount: limit.amount,
     used: Math.max(0, used),
+    remaining: Math.max(0, Math.round(remaining * 100) / 100),
     percent: Math.min(100, Math.max(0, percent)),
   };
 }

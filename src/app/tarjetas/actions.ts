@@ -32,13 +32,13 @@ export async function revealCardDetails(cardId: string): Promise<RevealResult> {
       if (error.status === 401 || error.status === 403) {
         return {
           ok: false,
-          message: "Airwallex no permite mostrar los datos completos de esta tarjeta por ahora.",
+          message: "Por ahora no se pueden mostrar los datos completos de esta tarjeta.",
         };
       }
       if (error.status === 400) {
         return {
           ok: false,
-          message: "Airwallex solo muestra los datos de tarjetas virtuales activas.",
+          message: "Solo se pueden mostrar los datos de tarjetas virtuales activas.",
         };
       }
     }

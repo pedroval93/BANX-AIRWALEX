@@ -15,6 +15,7 @@ describe("primaryLimit", () => {
       interval: "ALL_TIME",
       amount: 6000,
       used: 5468.53,
+      remaining: 531.47,
       percent: 91,
     });
   });

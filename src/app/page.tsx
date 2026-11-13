@@ -11,6 +11,7 @@ import { formatAmount, maskedCardNumber } from "@/lib/cards/format";
 import { totalSpend } from "@/lib/cards/spend";
 import { getMyCardIds, getMyCardsOverview, getMyProfile, mainCurrency } from "@/lib/data";
 import { monthName, parseMonth } from "@/lib/dates";
+import { permissionsOf } from "@/lib/permissions";
 
 async function MyCards({ cardIds, showSpend }: { cardIds: string[]; showSpend: boolean }) {
   const month = parseMonth(undefined);
@@ -41,7 +42,7 @@ async function MyCards({ cardIds, showSpend }: { cardIds: string[]; showSpend: b
         >
           <span>Tarjeta</span>
           {showSpend ? <span className="text-right">Gasto de {monthName(month)}</span> : null}
-          {showSpend ? <span>Uso del límite</span> : null}
+          {showSpend ? <span>Saldo disponible</span> : null}
           <span>Estado</span>
           <span />
         </div>
@@ -72,7 +73,7 @@ async function MyCards({ cardIds, showSpend }: { cardIds: string[]; showSpend: b
                   ) : null}
                   {showSpend ? (
                     <span className="col-span-2 sm:col-span-1">
-                      <LimitBar usage={entry.limit} />
+                      <LimitBar usage={entry.limit} mode="available" />
                     </span>
                   ) : null}
                   <span className="row-start-1 sm:row-auto">
@@ -106,7 +107,8 @@ function ListSkeleton({ rows }: { rows: number }) {
 export default async function HomePage() {
   const user = await requireUser();
   const [profile, cardIds] = await Promise.all([getMyProfile(user.id), getMyCardIds(user.id)]);
-  const showSpend = profile?.show_transactions ?? false;
+  const can = permissionsOf(profile);
+  const showSpend = can.balance;
   const firstName = profile?.full_name?.split(" ")[0];
 
   return (
@@ -117,7 +119,7 @@ export default async function HomePage() {
           title={firstName ? `Hola, ${firstName}` : "Tus tarjetas"}
           subtitle={
             cardIds.length
-              ? `Abre una tarjeta para ver su número, vencimiento y CVV${showSpend ? ", y sus movimientos" : ""}.`
+              ? `Abre una tarjeta para ver su número, vencimiento y CVV${can.transactions ? ", y sus movimientos" : ""}.`
               : undefined
           }
         />

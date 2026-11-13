@@ -137,16 +137,30 @@ export async function unassignCard(formData: FormData) {
   revalidatePath("/admin");
 }
 
-export async function setShowTransactions(formData: FormData) {
+export type PermissionState = { error: string | null };
+
+const PERMISSION_COLUMN = { balance: "show_balance", transactions: "show_transactions" } as const;
+
+// Prende o apaga lo que un cliente puede ver: su saldo o sus movimientos.
+export async function setPermission(_prev: PermissionState, formData: FormData): Promise<PermissionState> {
   await requireAdmin();
   const userId = String(formData.get("user_id") ?? "");
-  const show = formData.get("show") === "true";
-  if (!userId) return;
+  const which = formData.get("permission") === "balance" ? "balance" : "transactions";
+  const value = formData.get("value") === "true";
+  if (!userId) return { error: "Falta el cliente." };
 
   const { error } = await createAdminClient()
     .from("profiles")
-    .update({ show_transactions: show })
+    .update({ [PERMISSION_COLUMN[which]]: value })
     .eq("id", userId);
-  if (error) throw new Error(`No se pudo cambiar el ajuste: ${error.message}`);
+  if (error) {
+    const missingColumn = /show_balance/.test(error.message);
+    return {
+      error: missingColumn
+        ? "Para separar el saldo corre supabase/migrations/0002_show_balance.sql en Supabase → SQL Editor."
+        : `No se pudo cambiar el ajuste: ${error.message}`,
+    };
+  }
   revalidatePath("/admin");
+  return { error: null };
 }

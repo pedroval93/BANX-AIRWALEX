@@ -8,6 +8,7 @@ import { maskedCardNumber } from "@/lib/cards/format";
 import { totalSpend } from "@/lib/cards/spend";
 import { getAllCardsOverview, listAllCards, listClients, mainCurrency } from "@/lib/data";
 import { monthName, parseMonth } from "@/lib/dates";
+import { permissionsOf } from "@/lib/permissions";
 import { CardsTable, type CardRow } from "./cards-table";
 import { ClientsList } from "./clients-list";
 import { InviteForm } from "./link-forms";
@@ -22,7 +23,7 @@ async function CardsSection() {
   if (error) {
     return (
       <p role="alert" className="mt-8 rounded-xl bg-danger-wash p-4 text-sm text-danger">
-        No se pudieron traer las tarjetas de Airwallex: {error}
+        No se pudieron traer las tarjetas: {error}
       </p>
     );
   }
@@ -85,12 +86,12 @@ async function ClientsSection() {
         email: c.email,
         hasName: Boolean(c.full_name),
         lastSignInAt: c.lastSignInAt,
-        showTransactions: c.show_transactions,
+        permissions: permissionsOf(c),
         cards: c.cardIds.map((id) => {
           const card = cardsById.get(id);
           return {
             id,
-            name: card?.nick_name || (card ? "Sin nombre" : "No aparece en Airwallex"),
+            name: card?.nick_name || (card ? "Sin nombre" : "Ya no existe"),
             last4: card ? last4(card.card_number) : id.slice(0, 4),
             status: card?.card_status,
           };
@@ -102,7 +103,7 @@ async function ClientsSection() {
 
 function TableSkeleton() {
   return (
-    <div aria-busy="true" aria-label="Trayendo tarjetas de Airwallex">
+    <div aria-busy="true" aria-label="Trayendo tarjetas">
       <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
         {[0, 1, 2].map((i) => (
           <div key={i}>
@@ -117,7 +118,7 @@ function TableSkeleton() {
           <Skeleton key={i} className="h-14 w-full" />
         ))}
       </div>
-      <p className="mt-4 text-sm text-muted">Trayendo tarjetas de Airwallex…</p>
+      <p className="mt-4 text-sm text-muted">Trayendo tarjetas…</p>
     </div>
   );
 }
@@ -136,7 +137,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
           subtitle={
             tab === "tarjetas"
               ? "Asigna tarjetas a tus clientes y revisa cuánto gastan."
-              : "Invita clientes y decide si ven su gasto y movimientos."
+              : "Invita clientes y decide si ven su saldo y sus movimientos."
           }
         />
         <Tabs
