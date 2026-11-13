@@ -29,8 +29,12 @@ function client(fetchImpl: typeof fetch) {
     apiKey: "api-key",
     baseUrl: "https://api.sandbox.airwallex.com",
     fetchImpl,
+    retryDelayMs: 0,
   });
 }
+
+const DAY = 86_400_000;
+const daysAgo = (days: number) => new Date(Date.now() - days * DAY).toISOString();
 
 describe("Airwallex client", () => {
   it("logs in with the client id and api key, then sends the bearer token", async () => {
@@ -63,21 +67,88 @@ describe("Airwallex client", () => {
   });
 
   it("lists every card across pages", async () => {
-    const { calls, fetchImpl } = fakeAirwallex({
+    const { fetchImpl } = fakeAirwallex({
       "POST /api/v1/authentication/login": login,
-      "GET /api/v1/issuing/cards": (url) =>
-        url.searchParams.get("page_num") === "0"
+      "GET /api/v1/issuing/cards": (url) => {
+        // Las dos páginas existen solo en la ventana más reciente.
+        if (Date.parse(url.searchParams.get("to_created_at")!) < Date.now() - DAY) {
+          return { body: { has_more: false, items: [] } };
+        }
+        return url.searchParams.get("page_num") === "0"
           ? { body: { has_more: true, items: [{ card_id: "a" }] } }
-          : { body: { has_more: false, items: [{ card_id: "b" }] } },
+          : { body: { has_more: false, items: [{ card_id: "b" }] } };
+      },
     });
 
     const cards = await client(fetchImpl).listCards();
 
     expect(cards.map((c) => c.card_id)).toEqual(["a", "b"]);
-    const listCall = calls.find((c) => c.url.pathname === "/api/v1/issuing/cards")!;
-    // Sin rango de fechas Airwallex solo devuelve 30 días; pedimos todo el historial.
-    expect(listCall.url.searchParams.get("from_created_at")).toBeTruthy();
-    expect(listCall.url.searchParams.get("to_created_at")).toBeTruthy();
+  });
+
+  it("walks back in windows of at most 90 days, across gaps, until two empty years", async () => {
+    // Airwallex rechaza rangos de más de 90 días ("invalid date range").
+    const history = [
+      { card_id: "new", created_at: daysAgo(10) },
+      { card_id: "older", created_at: daysAgo(200) },
+      // Tres ventanas vacías antes de esta: la búsqueda no debe parar ahí.
+      { card_id: "after-gap", created_at: daysAgo(560) },
+      // Más de dos años sin tarjetas antes de esta: ya no se busca.
+      { card_id: "ancient", created_at: daysAgo(560 + 3 * 365) },
+    ];
+    const { calls, fetchImpl } = fakeAirwallex({
+      "POST /api/v1/authentication/login": login,
+      "GET /api/v1/issuing/cards": (url) => {
+        const from = Date.parse(url.searchParams.get("from_created_at")!);
+        const to = Date.parse(url.searchParams.get("to_created_at")!);
+        if (to - from > 90 * DAY) {
+          return { status: 400, body: { code: "invalid_argument", message: "invalid date range" } };
+        }
+        const items = history.filter((c) => {
+          const t = Date.parse(c.created_at);
+          return t >= from && t <= to;
+        });
+        return { body: { has_more: false, items } };
+      },
+    });
+
+    const cards = await client(fetchImpl).listCards();
+
+    expect(cards.map((c) => c.card_id)).toEqual(["new", "older", "after-gap"]);
+    const listCalls = calls.filter((c) => c.url.pathname === "/api/v1/issuing/cards");
+    expect(listCalls.length).toBeLessThan(20);
+  });
+
+  it("does not repeat a card that falls on the edge between two windows", async () => {
+    const { fetchImpl } = fakeAirwallex({
+      "POST /api/v1/authentication/login": login,
+      "GET /api/v1/issuing/cards": (url) =>
+        // Una tarjeta en el borde aparece en las dos ventanas que lo comparten.
+        Date.parse(url.searchParams.get("to_created_at")!) > Date.now() - 200 * DAY
+          ? { body: { has_more: false, items: [{ card_id: "edge" }] } }
+          : { body: { has_more: false, items: [] } },
+    });
+
+    const cards = await client(fetchImpl).listCards();
+
+    expect(cards.map((c) => c.card_id)).toEqual(["edge"]);
+  });
+
+  it("waits and retries when Airwallex says too many requests", async () => {
+    let attempts = 0;
+    const { fetchImpl } = fakeAirwallex({
+      "POST /api/v1/authentication/login": login,
+      "GET /api/v1/issuing/cards/card-1": () => {
+        attempts++;
+        return attempts < 3
+          ? { status: 429, body: { code: "too_many_requests", message: "Too many requests" } }
+          : { body: { card_id: "card-1" } };
+      },
+    });
+
+    const card = await client(fetchImpl).getCard("card-1");
+
+    expect(card.card_id).toBe("card-1");
+    expect(attempts).toBe(3);
   });
 
   it("lists a card's transactions in a date range following page bookmarks", async () => {

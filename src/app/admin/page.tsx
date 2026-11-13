@@ -22,7 +22,12 @@ export default async function AdminPage() {
 
   const cardsById = new Map(cards.map((c) => [c.card_id, c]));
   const assigned = new Set(clients.flatMap((c) => c.cardIds));
-  const unassigned = cards.filter((c) => !assigned.has(c.card_id));
+  // Las tarjetas cerradas ya no se pueden usar: no se ofrecen para asignar.
+  const free = cards.filter((c) => !assigned.has(c.card_id));
+  const closedCount = free.filter((c) => c.card_status === "CLOSED").length;
+  const unassigned = free
+    .filter((c) => c.card_status !== "CLOSED")
+    .sort((a, b) => (a.nick_name ?? "").localeCompare(b.nick_name ?? "", "es", { numeric: true }));
 
   return (
     <>
@@ -152,6 +157,13 @@ export default async function AdminPage() {
               ))}
             </ul>
           )}
+          {closedCount > 0 ? (
+            <p className="mt-3 text-sm text-muted">
+              {closedCount === 1
+                ? "1 tarjeta cerrada no aparece aquí."
+                : `${closedCount} tarjetas cerradas no aparecen aquí.`}
+            </p>
+          ) : null}
         </section>
       </main>
     </>
