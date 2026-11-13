@@ -138,7 +138,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
           subtitle={
             tab === "tarjetas"
               ? "Asigna tarjetas a tus clientes y revisa cuánto gastan."
-              : "Invita clientes y decide si ven su saldo y sus movimientos."
+              : "Invita clientes y decide qué ven: su saldo, sus movimientos y los datos de tarjeta."
           }
         />
         <Tabs
