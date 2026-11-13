@@ -76,9 +76,20 @@ export type CardTransaction = {
 
 export type DateRange = { from: string; to: string };
 
+export type LimitInterval = "PER_TRANSACTION" | "DAILY" | "WEEKLY" | "MONTHLY" | "ALL_TIME" | (string & {});
+
+/** GET /api/v1/issuing/cards/{id}/limits: límites y lo que queda de cada uno. */
+export type CardLimits = {
+  currency: string;
+  limits: { amount: number; interval: LimitInterval; remaining?: number }[];
+};
+
 export interface IssuingApi {
   listCards(): Promise<AirwallexCard[]>;
   getCard(cardId: string): Promise<AirwallexCard>;
   getCardDetails(cardId: string): Promise<SensitiveCardDetails>;
+  getCardLimits(cardId: string): Promise<CardLimits>;
   listCardTransactions(cardId: string, range: DateRange): Promise<CardTransaction[]>;
+  /** Movimientos de todas las tarjetas de la cuenta. */
+  listTransactions(range: DateRange): Promise<CardTransaction[]>;
 }

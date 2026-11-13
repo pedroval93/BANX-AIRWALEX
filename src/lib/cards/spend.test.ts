@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardTransaction } from "@/lib/airwallex/types";
-import { countsAsSpend, summarizeSpend, transactionAmount } from "./spend";
+import { countsAsSpend, spendByCard, summarizeSpend, totalSpend, transactionAmount } from "./spend";
 
 function tx(partial: Partial<CardTransaction>): CardTransaction {
   return {
@@ -77,5 +77,36 @@ describe("summarizeSpend", () => {
 
   it("is empty when there are no transactions", () => {
     expect(summarizeSpend([])).toEqual([]);
+  });
+});
+
+describe("spendByCard", () => {
+  it("summarizes the spend of each card separately", () => {
+    const byCard = spendByCard([
+      tx({ card_id: "a", billing_amounts: { currency: "MXN", total_debited: 100 } }),
+      tx({ card_id: "b", billing_amounts: { currency: "MXN", total_debited: 40 } }),
+      tx({ card_id: "a", billing_amounts: { currency: "MXN", total_debited: 20.5 } }),
+    ]);
+
+    expect(byCard.get("a")).toEqual([{ currency: "MXN", total: 120.5, count: 2 }]);
+    expect(byCard.get("b")).toEqual([{ currency: "MXN", total: 40, count: 1 }]);
+    expect(byCard.get("c")).toBeUndefined();
+  });
+});
+
+describe("totalSpend", () => {
+  it("adds the spend of several cards per currency", () => {
+    expect(
+      totalSpend([
+        [{ currency: "MXN", total: 100.1, count: 1 }],
+        [
+          { currency: "MXN", total: 0.2, count: 2 },
+          { currency: "USD", total: 5, count: 1 },
+        ],
+      ]),
+    ).toEqual([
+      { currency: "MXN", total: 100.3, count: 3 },
+      { currency: "USD", total: 5, count: 1 },
+    ]);
   });
 });

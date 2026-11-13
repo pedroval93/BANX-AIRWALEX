@@ -142,9 +142,26 @@ export function createDemoIssuing(now = new Date()): IssuingApi {
     async getCardDetails(cardId) {
       return { ...findCard(cardId).details };
     },
+    async getCardLimits(cardId) {
+      const index = CARDS.indexOf(findCard(cardId));
+      const amount = [20000, 50000, 5000][index] ?? 10000;
+      const used = [13600, 9800, 4650][index] ?? 0;
+      return {
+        currency: "MXN",
+        limits: [
+          { amount, interval: "ALL_TIME", remaining: amount - used },
+          { amount: 10000, interval: "PER_TRANSACTION", remaining: 10000 },
+        ],
+      };
+    },
     async listCardTransactions(cardId, range) {
       const index = CARDS.indexOf(findCard(cardId));
       return transactionsFor(cardId, index, now)
+        .filter((tx) => tx.created_at >= range.from && tx.created_at <= range.to)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    },
+    async listTransactions(range) {
+      return CARDS.flatMap((card, index) => transactionsFor(card.card_id, index, now))
         .filter((tx) => tx.created_at >= range.from && tx.created_at <= range.to)
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
     },

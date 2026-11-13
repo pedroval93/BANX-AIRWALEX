@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthRange, parseMonth, shiftMonth } from "./dates";
+import { monthRange, parseMonth, shiftMonth, monthName } from "./dates";
 
 describe("parseMonth", () => {
   it("accepts a YYYY-MM value", () => {
@@ -27,5 +27,12 @@ describe("monthRange", () => {
       from: "2026-11-01T06:00:00.000Z",
       to: "2026-12-01T05:59:59.999Z",
     });
+  });
+});
+
+describe("monthName", () => {
+  it("is the lowercase name of the month, without the year", () => {
+    expect(monthName("2026-11")).toBe("noviembre");
+    expect(monthName("2027-01")).toBe("enero");
   });
 });

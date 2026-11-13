@@ -1,170 +1,171 @@
+import { Suspense } from "react";
 import { AppHeader } from "@/components/app-header";
-import { Button } from "@/components/ui";
-import type { AirwallexCard } from "@/lib/airwallex";
+import { CountUp } from "@/components/count-up";
+import { Kpi, KpiRow, PageHeading, SpendValue, Tabs } from "@/components/page";
+import { Skeleton } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
 import { maskedCardNumber } from "@/lib/cards/format";
-import { CARD_STATUS_LABEL } from "@/lib/cards/labels";
-import { listAllCards, listClients } from "@/lib/data";
-import { formatDateTime } from "@/lib/dates";
-import { assignCard, setShowTransactions, unassignCard } from "./actions";
-import { InviteForm, PasswordLinkForm } from "./link-forms";
+import { totalSpend } from "@/lib/cards/spend";
+import { getAllCardsOverview, listAllCards, listClients, mainCurrency } from "@/lib/data";
+import { monthName, parseMonth } from "@/lib/dates";
+import { CardsTable, type CardRow } from "./cards-table";
+import { ClientsList } from "./clients-list";
+import { InviteForm } from "./link-forms";
 
-function cardLabel(card: AirwallexCard | undefined, cardId: string) {
-  if (!card) return `Tarjeta ${cardId.slice(0, 8)} (no aparece en Airwallex)`;
-  const status =
-    card.card_status && card.card_status !== "ACTIVE" ? `, ${CARD_STATUS_LABEL[card.card_status].toLowerCase()}` : "";
-  return `${card.nick_name || "Sin nombre"}, ${maskedCardNumber(card.card_number).slice(-4)}${status}`;
-}
+const last4 = (masked: string | undefined) => maskedCardNumber(masked).slice(-4);
+const clientName = (c: { full_name: string | null; email: string }) => c.full_name || c.email;
 
-export default async function AdminPage() {
-  const user = await requireAdmin();
-  const [clients, { cards, error: cardsError }] = await Promise.all([listClients(), listAllCards()]);
+async function CardsSection() {
+  const month = parseMonth(undefined);
+  const [clients, { rows, error }] = await Promise.all([listClients(), getAllCardsOverview(month)]);
 
-  const cardsById = new Map(cards.map((c) => [c.card_id, c]));
-  const assigned = new Set(clients.flatMap((c) => c.cardIds));
-  // Las tarjetas cerradas ya no se pueden usar: no se ofrecen para asignar.
-  const free = cards.filter((c) => !assigned.has(c.card_id));
-  const closedCount = free.filter((c) => c.card_status === "CLOSED").length;
-  const unassigned = free
-    .filter((c) => c.card_status !== "CLOSED")
-    .sort((a, b) => (a.nick_name ?? "").localeCompare(b.nick_name ?? "", "es", { numeric: true }));
+  if (error) {
+    return (
+      <p role="alert" className="mt-8 rounded-xl bg-danger-wash p-4 text-sm text-danger">
+        No se pudieron traer las tarjetas de Airwallex: {error}
+      </p>
+    );
+  }
+
+  const ownerOf = new Map(clients.flatMap((c) => c.cardIds.map((id) => [id, c.id] as const)));
+  const tableRows: CardRow[] = rows
+    .map(({ card, spend, limit }) => ({
+      id: card.card_id,
+      name: card.nick_name || "Sin nombre",
+      last4: last4(card.card_number),
+      status: card.card_status,
+      clientId: ownerOf.get(card.card_id) ?? null,
+      spend,
+      limit,
+    }))
+    // Activas primero; después por nombre ("Test 2" antes que "Test 10").
+    .sort(
+      (a, b) =>
+        Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE") ||
+        a.name.localeCompare(b.name, "es", { numeric: true }),
+    );
+
+  const active = tableRows.filter((r) => r.status === "ACTIVE");
+  const currency = mainCurrency(rows.map((r) => r.spend));
 
   return (
     <>
-      <AppHeader user={user} />
-      <main className="mx-auto max-w-2xl px-4 pb-20">
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight">Administrar</h1>
+      <KpiRow>
+        <Kpi label={`Gasto de ${monthName(month)}`}>
+          <SpendValue spend={totalSpend(rows.map((r) => r.spend))} fallbackCurrency={currency} />
+        </Kpi>
+        <Kpi label="Tarjetas activas">
+          <CountUp value={active.length} />
+        </Kpi>
+        <Kpi label="Activas asignadas">
+          <CountUp value={active.filter((r) => r.clientId).length} />{" "}
+          <span className="text-2xl text-muted">de {active.length}</span>
+        </Kpi>
+      </KpiRow>
+      <div className="mt-10">
+        <CardsTable
+          rows={tableRows}
+          clients={clients.map((c) => ({ id: c.id, label: clientName(c) }))}
+          defaultCurrency={currency}
+          monthName={monthName(month)}
+        />
+      </div>
+    </>
+  );
+}
 
-        <section className="mt-10" aria-labelledby="invitar">
-          <h2 id="invitar" className="text-lg font-semibold">
-            Invitar cliente
-          </h2>
-          <p className="mb-4 mt-1 text-sm text-muted">
-            Crea su cuenta y te da un enlace para que elija su contraseña. Tú se lo mandas.
-          </p>
-          <InviteForm />
-        </section>
+async function ClientsSection() {
+  const [clients, { cards }] = await Promise.all([listClients(), listAllCards()]);
+  const cardsById = new Map(cards.map((c) => [c.card_id, c]));
+  return (
+    <ClientsList
+      clients={clients.map((c) => ({
+        id: c.id,
+        name: clientName(c),
+        email: c.email,
+        hasName: Boolean(c.full_name),
+        lastSignInAt: c.lastSignInAt,
+        showTransactions: c.show_transactions,
+        cards: c.cardIds.map((id) => {
+          const card = cardsById.get(id);
+          return {
+            id,
+            name: card?.nick_name || (card ? "Sin nombre" : "No aparece en Airwallex"),
+            last4: card ? last4(card.card_number) : id.slice(0, 4),
+            status: card?.card_status,
+          };
+        }),
+      }))}
+    />
+  );
+}
 
-        {cardsError ? (
-          <p role="alert" className="mt-10 rounded-lg border border-danger/40 p-4 text-sm text-danger">
-            No se pudieron traer las tarjetas de Airwallex: {cardsError}
-          </p>
-        ) : null}
+function TableSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Trayendo tarjetas de Airwallex">
+      <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i}>
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="mt-2 h-9 w-44" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="mt-10 h-11 w-full" />
+      <div className="mt-6 space-y-2">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-14 w-full" />
+        ))}
+      </div>
+      <p className="mt-4 text-sm text-muted">Trayendo tarjetas de Airwallex…</p>
+    </div>
+  );
+}
 
-        <section className="mt-12" aria-labelledby="clientes">
-          <h2 id="clientes" className="text-lg font-semibold">
-            Clientes ({clients.length})
-          </h2>
+export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
+  const user = await requireAdmin();
+  const { vista } = await searchParams;
+  const tab = vista === "clientes" ? "clientes" : "tarjetas";
 
-          {clients.length === 0 ? (
-            <p className="mt-3 text-muted">Aún no hay clientes. Invita al primero arriba.</p>
-          ) : (
-            <ul className="mt-4 divide-y divide-line border-y border-line">
-              {clients.map((client) => (
-                <li key={client.id} className="space-y-4 py-6">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{client.full_name || client.email}</p>
-                      {client.full_name ? <p className="truncate text-sm text-muted">{client.email}</p> : null}
-                    </div>
-                    <p className="text-sm text-muted">
-                      {client.lastSignInAt
-                        ? `Último acceso: ${formatDateTime(client.lastSignInAt)}`
-                        : "Invitado, aún no entra"}
-                    </p>
-                  </div>
+  return (
+    <>
+      <AppHeader user={user} section="admin" />
+      <main className="mx-auto max-w-6xl px-4 pb-32">
+        <PageHeading
+          title={tab === "tarjetas" ? "Tarjetas" : "Clientes"}
+          subtitle={
+            tab === "tarjetas"
+              ? "Asigna tarjetas a tus clientes y revisa cuánto gastan."
+              : "Invita clientes y decide si ven su gasto y movimientos."
+          }
+        />
+        <Tabs
+          items={[
+            { href: "/admin", label: "Tarjetas", active: tab === "tarjetas" },
+            { href: "/admin?vista=clientes", label: "Clientes", active: tab === "clientes" },
+          ]}
+        />
 
-                  <form action={setShowTransactions} className="flex items-center justify-between gap-4">
-                    <input type="hidden" name="user_id" value={client.id} />
-                    <input type="hidden" name="show" value={String(!client.show_transactions)} />
-                    <span className="text-sm">
-                      Gasto y movimientos:{" "}
-                      <strong className={client.show_transactions ? "text-credit" : "text-muted"}>
-                        {client.show_transactions ? "los ve" : "ocultos"}
-                      </strong>
-                    </span>
-                    <Button type="submit" variant="quiet" className="py-1.5">
-                      {client.show_transactions ? "Ocultar" : "Mostrar"}
-                    </Button>
-                  </form>
-
-                  <div>
-                    <p className="text-sm text-muted">Tarjetas</p>
-                    {client.cardIds.length === 0 ? (
-                      <p className="text-sm">Sin tarjetas asignadas.</p>
-                    ) : (
-                      <ul className="mt-1 space-y-1">
-                        {client.cardIds.map((cardId) => (
-                          <li key={cardId} className="flex items-center justify-between gap-4">
-                            <span className="text-sm">{cardLabel(cardsById.get(cardId), cardId)}</span>
-                            <form action={unassignCard}>
-                              <input type="hidden" name="card_id" value={cardId} />
-                              <Button type="submit" variant="danger" className="px-0 py-1">
-                                Quitar
-                              </Button>
-                            </form>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-
-                  {unassigned.length > 0 ? (
-                    <form action={assignCard} className="flex gap-2">
-                      <input type="hidden" name="user_id" value={client.id} />
-                      <label className="sr-only" htmlFor={`card-${client.id}`}>
-                        Tarjeta para asignar
-                      </label>
-                      <select
-                        id={`card-${client.id}`}
-                        name="card_id"
-                        required
-                        defaultValue=""
-                        className="min-w-0 flex-1 rounded-md border border-line bg-surface px-3 py-2 text-sm"
-                      >
-                        <option value="" disabled>
-                          Elige una tarjeta sin asignar
-                        </option>
-                        {unassigned.map((card) => (
-                          <option key={card.card_id} value={card.card_id}>
-                            {cardLabel(card, card.card_id)}
-                          </option>
-                        ))}
-                      </select>
-                      <Button type="submit" variant="quiet" className="py-2">
-                        Asignar
-                      </Button>
-                    </form>
-                  ) : null}
-
-                  <PasswordLinkForm email={client.email} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="mt-12" aria-labelledby="sin-asignar">
-          <h2 id="sin-asignar" className="text-lg font-semibold">
-            Tarjetas sin asignar ({unassigned.length})
-          </h2>
-          {unassigned.length === 0 ? (
-            <p className="mt-2 text-sm text-muted">Todas las tarjetas de Airwallex ya tienen dueño.</p>
-          ) : (
-            <ul className="mt-2 space-y-1 text-sm">
-              {unassigned.map((card) => (
-                <li key={card.card_id}>{cardLabel(card, card.card_id)}</li>
-              ))}
-            </ul>
-          )}
-          {closedCount > 0 ? (
-            <p className="mt-3 text-sm text-muted">
-              {closedCount === 1
-                ? "1 tarjeta cerrada no aparece aquí."
-                : `${closedCount} tarjetas cerradas no aparecen aquí.`}
-            </p>
-          ) : null}
-        </section>
+        {tab === "tarjetas" ? (
+          <Suspense fallback={<TableSkeleton />}>
+            <CardsSection />
+          </Suspense>
+        ) : (
+          <>
+            <section className="mt-8 rounded-2xl bg-wash p-5 sm:p-6" aria-labelledby="invitar">
+              <h2 id="invitar" className="font-display text-2xl font-semibold tracking-tight">
+                Invitar cliente
+              </h2>
+              <p className="mb-4 mt-1 text-sm text-muted">
+                Crea su cuenta y te da un enlace para que elija su contraseña. Tú se lo mandas.
+              </p>
+              <InviteForm />
+            </section>
+            <Suspense fallback={<Skeleton className="mt-10 h-64 w-full" />}>
+              <ClientsSection />
+            </Suspense>
+          </>
+        )}
       </main>
     </>
   );

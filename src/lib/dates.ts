@@ -31,6 +31,14 @@ export function monthRange(month: string): DateRange {
   return { from: from.toISOString(), to: new Date(next.getTime() - 1).toISOString() };
 }
 
+/** "noviembre": el mes en minúsculas, sin el año. */
+export function monthName(month: string): string {
+  const [year, m] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("es-MX", { month: "long", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, m - 1, 15)),
+  );
+}
+
 export function monthLabel(month: string): string {
   const [year, m] = month.split("-").map(Number);
   const label = new Intl.DateTimeFormat("es-MX", {

@@ -5,7 +5,8 @@ import { requireUser } from "@/lib/auth";
 import { formatCardNumber, formatExpiry } from "@/lib/cards/format";
 import { userOwnsCard } from "@/lib/data";
 
-export type RevealedDetails = { number: string; cvv: string; expiry: string; nameOnCard: string };
+// Sin el nombre impreso en la tarjeta: es el de la empresa emisora y no se le muestra al cliente.
+export type RevealedDetails = { number: string; cvv: string; expiry: string };
 export type RevealResult = { ok: true; details: RevealedDetails } | { ok: false; message: string };
 
 // Trae número completo, vencimiento y CVV desde Airwallex en el momento.
@@ -24,7 +25,6 @@ export async function revealCardDetails(cardId: string): Promise<RevealResult> {
         number: formatCardNumber(d.card_number),
         cvv: d.cvv,
         expiry: formatExpiry(d.expiry_month, d.expiry_year),
-        nameOnCard: d.name_on_card,
       },
     };
   } catch (error) {

@@ -1,5 +1,9 @@
 import "server-only";
-import { getIssuing, type AirwallexCard } from "@/lib/airwallex";
+import { getIssuing, type AirwallexCard, type CardTransaction } from "@/lib/airwallex";
+import { primaryLimit, type LimitUsage } from "@/lib/cards/limits";
+import { spendByCard, summarizeSpend, type SpendSummary } from "@/lib/cards/spend";
+import { mapLimit } from "@/lib/concurrency";
+import { monthRange } from "@/lib/dates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -85,4 +89,79 @@ export async function listAllCards(): Promise<{ cards: AirwallexCard[]; error: s
       error: error instanceof Error ? error.message : "Airwallex no respondió.",
     };
   }
+}
+
+// --- Resumen de cada tarjeta para las tablas ---
+
+export type CardOverview = {
+  card: AirwallexCard;
+  spend: SpendSummary[];
+  limit: LimitUsage | null;
+};
+
+/** La moneda que más aparece en los movimientos; sirve para mostrar "0.00 MXN". */
+export function mainCurrency(spend: SpendSummary[][]): string {
+  const counts = new Map<string, number>();
+  for (const s of spend.flat()) counts.set(s.currency, (counts.get(s.currency) ?? 0) + s.count);
+  return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "MXN";
+}
+
+async function limitsFor(cards: AirwallexCard[]): Promise<Map<string, LimitUsage | null>> {
+  const issuing = getIssuing();
+  // Las cerradas ya no tienen límite que mostrar.
+  const open = cards.filter((c) => c.card_status !== "CLOSED");
+  const usages = await mapLimit(open, 4, async (card) => {
+    try {
+      return primaryLimit(await issuing.getCardLimits(card.card_id));
+    } catch {
+      return null;
+    }
+  });
+  return new Map(open.map((card, i) => [card.card_id, usages[i]]));
+}
+
+/** Admin: todas las tarjetas, con el gasto del mes y el uso del límite. */
+export async function getAllCardsOverview(month: string): Promise<{
+  rows: CardOverview[];
+  error: string | null;
+}> {
+  const { cards, error } = await listAllCards();
+  if (error) return { rows: [], error };
+
+  const issuing = getIssuing();
+  const [transactions, limits] = await Promise.all([
+    issuing.listTransactions(monthRange(month)).catch(() => [] as CardTransaction[]),
+    limitsFor(cards),
+  ]);
+  const spend = spendByCard(transactions);
+  return {
+    rows: cards.map((card) => ({
+      card,
+      spend: spend.get(card.card_id) ?? [],
+      limit: limits.get(card.card_id) ?? null,
+    })),
+    error: null,
+  };
+}
+
+/** Cliente: sus tarjetas. Gasto y límite solo si el admin le permite verlos. */
+export async function getMyCardsOverview(
+  cardIds: string[],
+  month: string,
+  withSpend: boolean,
+): Promise<(CardOverview | { card: null; id: string })[]> {
+  const issuing = getIssuing();
+  return mapLimit(cardIds, 3, async (id) => {
+    try {
+      const card = await issuing.getCard(id);
+      if (!withSpend) return { card, spend: [], limit: null };
+      const [txs, limits] = await Promise.all([
+        issuing.listCardTransactions(id, monthRange(month)).catch(() => [] as CardTransaction[]),
+        card.card_status === "CLOSED" ? null : issuing.getCardLimits(id).catch(() => null),
+      ]);
+      return { card, spend: summarizeSpend(txs), limit: primaryLimit(limits) };
+    } catch {
+      return { card: null, id };
+    }
+  });
 }

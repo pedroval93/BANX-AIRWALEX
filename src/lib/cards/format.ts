@@ -16,6 +16,13 @@ export function brandLabel(brand: string | undefined): string {
   return (brand ?? "").toUpperCase();
 }
 
+const amountFormat = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** "3,645.40 MXN": con el código de moneda, para tablas con varias monedas. */
+export function formatAmount(amount: number, currency: string): string {
+  return `${amountFormat.format(amount)} ${currency}`;
+}
+
 export function formatMoney(amount: number, currency: string): string {
   try {
     return new Intl.NumberFormat("es-MX", { style: "currency", currency }).format(amount);

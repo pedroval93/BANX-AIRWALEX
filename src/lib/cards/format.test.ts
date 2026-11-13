@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { brandLabel, formatCardNumber, formatExpiry, maskedCardNumber } from "./format";
+import { brandLabel, formatAmount, formatCardNumber, formatExpiry, maskedCardNumber } from "./format";
+
+describe("formatAmount", () => {
+  it("writes the amount with two decimals followed by the currency code", () => {
+    expect(formatAmount(3645.4, "MXN")).toBe("3,645.40 MXN");
+    expect(formatAmount(0, "USD")).toBe("0.00 USD");
+  });
+});
 
 describe("formatCardNumber", () => {
   it("groups a 16-digit number in blocks of four", () => {

@@ -174,6 +174,42 @@ describe("Airwallex client", () => {
     expect(second.url.searchParams.get("page")).toBe("next-page");
   });
 
+  it("reads a card's limits and what is left of them", async () => {
+    const { fetchImpl } = fakeAirwallex({
+      "POST /api/v1/authentication/login": login,
+      "GET /api/v1/issuing/cards/card-1/limits": () => ({
+        body: { currency: "USD", limits: [{ amount: 6000, interval: "ALL_TIME", remaining: 531.47 }] },
+      }),
+    });
+
+    const limits = await client(fetchImpl).getCardLimits("card-1");
+
+    expect(limits).toEqual({
+      currency: "USD",
+      limits: [{ amount: 6000, interval: "ALL_TIME", remaining: 531.47 }],
+    });
+  });
+
+  it("lists the transactions of every card in a date range", async () => {
+    const { calls, fetchImpl } = fakeAirwallex({
+      "POST /api/v1/authentication/login": login,
+      "GET /api/v1/issuing/card_transactions": (url) =>
+        url.searchParams.get("page")
+          ? { body: { items: [{ id: "t2", card_id: "b" }], page_after: null } }
+          : { body: { items: [{ id: "t1", card_id: "a" }], page_after: "next" } },
+    });
+
+    const txs = await client(fetchImpl).listTransactions({
+      from: "2026-11-01T06:00:00.000Z",
+      to: "2026-12-01T05:59:59.999Z",
+    });
+
+    expect(txs.map((t) => t.id)).toEqual(["t1", "t2"]);
+    const first = calls.find((c) => c.url.pathname === "/api/v1/issuing/card_transactions")!;
+    expect(first.url.searchParams.has("card_id")).toBe(false);
+    expect(first.url.searchParams.get("from_created_at")).toBe("2026-11-01T06:00:00.000Z");
+  });
+
   it("reads the sensitive details of a card", async () => {
     const { fetchImpl } = fakeAirwallex({
       "POST /api/v1/authentication/login": login,

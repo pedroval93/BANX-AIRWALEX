@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/auth";
+import { parseAssignment, parseCardIds } from "@/lib/cards/bulk";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type LinkState = { error: string | null; link: string | null; email: string | null };
@@ -88,18 +89,39 @@ export async function createPasswordLink(_prev: LinkState, formData: FormData): 
   };
 }
 
-// Asignar una tarjeta que ya tenía otro cliente la cambia de dueño.
-export async function assignCard(formData: FormData) {
+export type AssignState = { error: string | null; assigned: number };
+
+// Asigna todas las tarjetas marcadas a un cliente en una sola operación.
+// Una tarjeta que ya tenía otro cliente cambia de dueño.
+export async function assignCards(_prev: AssignState, formData: FormData): Promise<AssignState> {
   await requireAdmin();
-  const userId = String(formData.get("user_id") ?? "");
-  const cardId = String(formData.get("card_id") ?? "");
-  if (!userId || !cardId) return;
+  const parsed = parseAssignment(formData);
+  if ("error" in parsed) return { error: parsed.error, assigned: 0 };
+
+  const rows = parsed.cardIds.map((cardId) => ({ user_id: parsed.userId, airwallex_card_id: cardId }));
+  const { error } = await createAdminClient()
+    .from("card_assignments")
+    .upsert(rows, { onConflict: "airwallex_card_id" });
+  if (error) return { error: `No se pudieron asignar las tarjetas: ${error.message}`, assigned: 0 };
+
+  revalidatePath("/admin");
+  return { error: null, assigned: rows.length };
+}
+
+// Les quita el dueño a todas las tarjetas marcadas.
+export async function unassignCards(_prev: AssignState, formData: FormData): Promise<AssignState> {
+  await requireAdmin();
+  const parsed = parseCardIds(formData);
+  if ("error" in parsed) return { error: parsed.error, assigned: 0 };
 
   const { error } = await createAdminClient()
     .from("card_assignments")
-    .upsert({ user_id: userId, airwallex_card_id: cardId }, { onConflict: "airwallex_card_id" });
-  if (error) throw new Error(`No se pudo asignar la tarjeta: ${error.message}`);
+    .delete()
+    .in("airwallex_card_id", parsed.cardIds);
+  if (error) return { error: `No se pudieron quitar las tarjetas: ${error.message}`, assigned: 0 };
+
   revalidatePath("/admin");
+  return { error: null, assigned: parsed.cardIds.length };
 }
 
 export async function unassignCard(formData: FormData) {

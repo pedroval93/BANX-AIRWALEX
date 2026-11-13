@@ -1,5 +1,6 @@
 import type {
   AirwallexCard,
+  CardLimits,
   CardTransaction,
   DateRange,
   IssuingApi,
@@ -146,27 +147,39 @@ export function createAirwallexClient({
       };
     },
 
-    async listCardTransactions(cardId: string, range: DateRange) {
-      const items: CardTransaction[] = [];
-      let bookmark: string | null = null;
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const params: Record<string, string> = {
-          card_id: cardId,
-          from_created_at: range.from,
-          to_created_at: range.to,
-          page_size: "100",
-        };
-        if (bookmark) params.page = bookmark;
+    getCardLimits(cardId) {
+      return get<CardLimits>(`/api/v1/issuing/cards/${encodeURIComponent(cardId)}/limits`);
+    },
 
-        const body: { items: CardTransaction[]; page_after?: string | null } = await get(
-          "/api/v1/issuing/card_transactions",
-          params,
-        );
-        items.push(...body.items);
-        bookmark = body.page_after ?? null;
-        if (!bookmark || body.items.length === 0) break;
-      }
-      return items;
+    listCardTransactions(cardId: string, range: DateRange) {
+      return listTransactionsPaged(range, cardId);
+    },
+
+    listTransactions(range: DateRange) {
+      return listTransactionsPaged(range);
     },
   };
+
+  async function listTransactionsPaged(range: DateRange, cardId?: string) {
+    const items: CardTransaction[] = [];
+    let bookmark: string | null = null;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const params: Record<string, string> = {
+        from_created_at: range.from,
+        to_created_at: range.to,
+        page_size: "100",
+      };
+      if (cardId) params.card_id = cardId;
+      if (bookmark) params.page = bookmark;
+
+      const body: { items: CardTransaction[]; page_after?: string | null } = await get(
+        "/api/v1/issuing/card_transactions",
+        params,
+      );
+      items.push(...body.items);
+      bookmark = body.page_after ?? null;
+      if (!bookmark || body.items.length === 0) break;
+    }
+    return items;
+  }
 }

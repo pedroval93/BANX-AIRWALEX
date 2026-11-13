@@ -38,3 +38,26 @@ export function summarizeSpend(transactions: CardTransaction[]): SpendSummary[] 
   }
   return [...byCurrency.values()];
 }
+
+/** Gasto de cada tarjeta a partir de los movimientos de toda la cuenta. */
+export function spendByCard(transactions: CardTransaction[]): Map<string, SpendSummary[]> {
+  const grouped = new Map<string, CardTransaction[]>();
+  for (const tx of transactions) {
+    const list = grouped.get(tx.card_id) ?? [];
+    list.push(tx);
+    grouped.set(tx.card_id, list);
+  }
+  return new Map([...grouped].map(([cardId, txs]) => [cardId, summarizeSpend(txs)]));
+}
+
+/** Suma el gasto de varias tarjetas, por moneda. */
+export function totalSpend(summaries: SpendSummary[][]): SpendSummary[] {
+  const byCurrency = new Map<string, SpendSummary>();
+  for (const s of summaries.flat()) {
+    const entry = byCurrency.get(s.currency) ?? { currency: s.currency, total: 0, count: 0 };
+    entry.total = Math.round((entry.total + s.total) * 100) / 100;
+    entry.count += s.count;
+    byCurrency.set(s.currency, entry);
+  }
+  return [...byCurrency.values()];
+}

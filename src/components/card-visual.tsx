@@ -12,11 +12,10 @@ type Props = {
   nickname: string;
   brand?: string;
   maskedNumber: string;
-  nameOnCard: string;
   canReveal: boolean;
 };
 
-export function CardVisual({ cardId, nickname, brand, maskedNumber, nameOnCard, canReveal }: Props) {
+export function CardVisual({ cardId, nickname, brand, maskedNumber, canReveal }: Props) {
   const [flipped, setFlipped] = useState(false);
   const [details, setDetails] = useState<RevealedDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +32,27 @@ export function CardVisual({ cardId, nickname, brand, maskedNumber, nameOnCard, 
     nickname,
     brand,
     number: details?.number ?? maskedNumber,
-    nameOnCard: details?.nameOnCard || nameOnCard,
     expiry: details?.expiry ?? "••/••",
     cvv: details?.cvv ?? "•••",
     revealed: Boolean(details),
   };
+
+  // Inclinación leve siguiendo el mouse (no en pantallas táctiles).
+  function tilt(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.pointerType !== "mouse" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const box = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - box.left) / box.width - 0.5;
+    const y = (e.clientY - box.top) / box.height - 0.5;
+    const inner = e.currentTarget.firstElementChild as HTMLElement | null;
+    inner?.style.setProperty("--tilt-x", `${(-y * 8).toFixed(2)}deg`);
+    inner?.style.setProperty("--tilt-y", `${(x * 10).toFixed(2)}deg`);
+  }
+
+  function untilt(e: React.PointerEvent<HTMLButtonElement>) {
+    const inner = e.currentTarget.firstElementChild as HTMLElement | null;
+    inner?.style.setProperty("--tilt-x", "0deg");
+    inner?.style.setProperty("--tilt-y", "0deg");
+  }
 
   function reveal() {
     setError(null);
@@ -53,12 +68,16 @@ export function CardVisual({ cardId, nickname, brand, maskedNumber, nameOnCard, 
       <button
         type="button"
         onClick={() => setFlipped((f) => !f)}
-        className="card-scene block w-full rounded-[18px] text-left"
+        onPointerMove={tilt}
+        onPointerLeave={untilt}
+        className="card-scene block w-full cursor-pointer rounded-[4.2%/6.66%] text-left"
         aria-label={flipped ? "Ver el frente de la tarjeta" : "Ver el reverso de la tarjeta"}
       >
-        <div className="card-flipper relative aspect-[1.586] w-full" data-flipped={flipped}>
-          <CardFront data={face} />
-          <CardBack data={face} />
+        <div className="card-tilt">
+          <div className="card-flipper relative aspect-[1.586] w-full" data-flipped={flipped}>
+            <CardFront data={face} />
+            <CardBack data={face} />
+          </div>
         </div>
       </button>
 

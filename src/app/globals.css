@@ -1,50 +1,63 @@
 @import "tailwindcss";
 
-/* Paleta: papel frío, tinta azul, tarjeta azul petróleo con latón. */
+/*
+  Marca BANX: Starnight (#2f3b3b), Musky Green (#e8f2c2) y naranja (#e84c00).
+  Fondos planos, sin degradados. El naranja lleva texto negro (5.5:1); nunca blanco.
+*/
 :root {
-  --paper: #edf0f2;
-  --surface: #f8f9fa;
-  --ink: #14202b;
-  --muted: #5b6b78;
-  --line: #d3d9de;
-  --accent: #1f6f8b;
-  --accent-ink: #ffffff;
-  --card: #1e3a4c;
-  --card-line: #2f5a70;
-  --brass: #c9a227;
-  --credit: #2e7d5b;
-  --danger: #b3412e;
-}
-
-@theme inline {
-  --color-paper: var(--paper);
-  --color-surface: var(--surface);
-  --color-ink: var(--ink);
-  --color-muted: var(--muted);
-  --color-line: var(--line);
-  --color-accent: var(--accent);
-  --color-accent-ink: var(--accent-ink);
-  --color-card: var(--card);
-  --color-card-line: var(--card-line);
-  --color-brass: var(--brass);
-  --color-credit: var(--credit);
-  --color-danger: var(--danger);
-  --font-sans: var(--font-ui);
-  --font-mono: var(--font-digits);
+  --paper: #ffffff;
+  --wash: #f6f9ec;
+  --highlight: #e8f2c2;
+  --ink: #2f3b3b;
+  --muted: #5c6868;
+  --line: #e1e5da;
+  --line-strong: #889391;
+  --accent: #e84c00;
+  --accent-ink: #000000;
+  --night: #2f3b3b;
+  --night-ink: #ffffff;
+  --silver: #c0c0c0;
+  --credit: #2f7a3e;
+  --danger: #b42318;
+  --danger-wash: #fdecea;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #0f171e;
-    --surface: #16212a;
-    --ink: #e6ecf0;
-    --muted: #93a3af;
-    --line: #26343f;
-    --accent: #5fb3cf;
-    --accent-ink: #0f171e;
-    --credit: #6cc39b;
-    --danger: #e98a77;
+    --paper: #232d2d;
+    --wash: #2a3535;
+    --highlight: #434d38;
+    --ink: #eef3e0;
+    --muted: #a9b4ae;
+    --line: #384545;
+    --line-strong: #74817e;
+    --accent: #ff5c1a;
+    --night: #1b2323;
+    --credit: #7fcf8e;
+    --danger: #ff8a7a;
+    --danger-wash: #4a2a26;
   }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-wash: var(--wash);
+  --color-highlight: var(--highlight);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-night: var(--night);
+  --color-night-ink: var(--night-ink);
+  --color-silver: var(--silver);
+  --color-credit: var(--credit);
+  --color-danger: var(--danger);
+  --color-danger-wash: var(--danger-wash);
+  --font-sans: var(--font-ui);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-digits);
 }
 
 body {
@@ -58,9 +71,14 @@ body {
   outline-offset: 2px;
 }
 
-/* Tarjeta: volteo 3D. */
+/* ── Tarjeta: volteo 3D y leve inclinación con el puntero ─────────── */
 .card-scene {
   perspective: 1400px;
+}
+.card-tilt {
+  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+  transform-style: preserve-3d;
+  transition: transform 180ms ease-out;
 }
 .card-flipper {
   transform-style: preserve-3d;
@@ -77,24 +95,58 @@ body {
   transform: rotateY(180deg);
 }
 
-/* Trama de seguridad tipo billete (guilloché) sobre la tarjeta. */
-.card-guilloche {
-  background-color: var(--card);
-  background-image:
-    repeating-radial-gradient(
-      circle at 110% 120%,
-      transparent 0 10px,
-      color-mix(in srgb, var(--card-line) 70%, transparent) 10px 11px
-    ),
-    repeating-radial-gradient(
-      circle at -20% -40%,
-      transparent 0 14px,
-      color-mix(in srgb, var(--card-line) 45%, transparent) 14px 15px
-    );
+/* ── Barras de uso del límite: crecen al aparecer ─────────────────── */
+.bar-fill {
+  transform-origin: left center;
+  transform: scaleX(var(--fill, 0));
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@starting-style {
+  .bar-fill {
+    transform: scaleX(0);
+  }
+}
+
+/* ── Barra de acciones en bulk y avisos: entran desde abajo ───────── */
+.dock {
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 200ms ease-out;
+}
+.dock[data-open="false"] {
+  transform: translate(-50%, 140%);
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: 160ms;
+}
+.dock[data-open="true"] {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+/* ── Esqueleto mientras llegan los datos de Airwallex ─────────────── */
+.skeleton {
+  background: linear-gradient(90deg, var(--line) 0%, var(--wash) 50%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+@keyframes skeleton {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .card-flipper {
+  .card-tilt,
+  .card-flipper,
+  .bar-fill,
+  .dock {
     transition: none;
+  }
+  .skeleton {
+    animation: none;
   }
 }
