@@ -35,18 +35,21 @@ export function ClientsList({ clients }: { clients: ClientItem[] }) {
       </h2>
       <p className="mt-1 text-sm text-muted">
         <strong className="font-medium text-ink">Saldo</strong> es el gasto del mes y lo que le queda disponible.{" "}
-        <strong className="font-medium text-ink">Movimientos</strong> es la lista de compras de cada tarjeta.
+        <strong className="font-medium text-ink">Movimientos</strong> es la lista de compras de cada tarjeta.{" "}
+        <strong className="font-medium text-ink">Datos de tarjeta</strong> es el número completo, el vencimiento y el
+        CVV; sin este permiso solo ve la terminación.
       </p>
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-line">
-        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[920px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-line bg-wash text-muted">
               <th scope="col" className="py-3 pl-4 pr-3 font-medium">Cliente</th>
               <th scope="col" className="px-3 py-3 font-medium">Tarjetas</th>
               <th scope="col" className="px-3 py-3 font-medium">Último acceso</th>
               <th scope="col" className="px-3 py-3 font-medium">Ve su saldo</th>
-              <th scope="col" className="py-3 pl-3 pr-4 font-medium">Ve sus movimientos</th>
+              <th scope="col" className="px-3 py-3 font-medium">Ve sus movimientos</th>
+              <th scope="col" className="py-3 pl-3 pr-4 font-medium">Ve datos de tarjeta</th>
             </tr>
           </thead>
           <tbody>
@@ -82,7 +85,7 @@ export function ClientsList({ clients }: { clients: ClientItem[] }) {
                         label={`${client.name} ve su saldo`}
                       />
                     </td>
-                    <td className="py-1 pl-3 pr-4">
+                    <td className="px-3 py-1">
                       <PermissionSwitch
                         userId={client.id}
                         permission="transactions"
@@ -90,10 +93,18 @@ export function ClientsList({ clients }: { clients: ClientItem[] }) {
                         label={`${client.name} ve sus movimientos`}
                       />
                     </td>
+                    <td className="py-1 pl-3 pr-4">
+                      <PermissionSwitch
+                        userId={client.id}
+                        permission="card_details"
+                        on={client.permissions.cardDetails}
+                        label={`${client.name} ve los datos completos de sus tarjetas`}
+                      />
+                    </td>
                   </tr>
                   {expanded ? (
                     <tr id={`cliente-${client.id}`} className="border-b border-line bg-wash last:border-b-0">
-                      <td colSpan={5} className="px-4 pb-4 pt-1">
+                      <td colSpan={6} className="px-4 pb-4 pt-1">
                         {client.cards.length === 0 ? (
                           <p className="text-muted">Sin tarjetas. Asígnale desde la pestaña Tarjetas.</p>
                         ) : (
@@ -111,7 +122,13 @@ export function ClientsList({ clients }: { clients: ClientItem[] }) {
                                   {card.status ? <StatusChip status={card.status} /> : null}
                                   <form action={unassignCard}>
                                     <input type="hidden" name="card_id" value={card.id} />
-                                    <Button type="submit" variant="danger" className="min-h-9 px-3">
+                                    <input type="hidden" name="user_id" value={client.id} />
+                                    <Button
+                                      type="submit"
+                                      variant="danger"
+                                      className="min-h-9 px-3"
+                                      aria-label={`Quitarle ${card.name} a ${client.name}`}
+                                    >
                                       Quitar
                                     </Button>
                                   </form>

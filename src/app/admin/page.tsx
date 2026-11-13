@@ -4,6 +4,7 @@ import { CountUp } from "@/components/count-up";
 import { Kpi, KpiRow, PageHeading, SpendValue, Tabs } from "@/components/page";
 import { Skeleton } from "@/components/ui";
 import { requireAdmin } from "@/lib/auth";
+import { clientsByCard } from "@/lib/cards/access";
 import { maskedCardNumber } from "@/lib/cards/format";
 import { totalSpend } from "@/lib/cards/spend";
 import { getAllCardsOverview, listAllCards, listClients, mainCurrency } from "@/lib/data";
@@ -28,14 +29,14 @@ async function CardsSection() {
     );
   }
 
-  const ownerOf = new Map(clients.flatMap((c) => c.cardIds.map((id) => [id, c.id] as const)));
+  const viewers = clientsByCard(clients);
   const tableRows: CardRow[] = rows
     .map(({ card, spend, limit }) => ({
       id: card.card_id,
       name: card.nick_name || "Sin nombre",
       last4: last4(card.card_number),
       status: card.card_status,
-      clientId: ownerOf.get(card.card_id) ?? null,
+      clientIds: viewers.get(card.card_id) ?? [],
       spend,
       limit,
     }))
@@ -59,7 +60,7 @@ async function CardsSection() {
           <CountUp value={active.length} />
         </Kpi>
         <Kpi label="Activas asignadas">
-          <CountUp value={active.filter((r) => r.clientId).length} />{" "}
+          <CountUp value={active.filter((r) => r.clientIds.length > 0).length} />{" "}
           <span className="text-2xl text-muted">de {active.length}</span>
         </Kpi>
       </KpiRow>

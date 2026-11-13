@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/auth";
-import { parseAssignment, parseCardIds } from "@/lib/cards/bulk";
+import { parseAssignment, parseRemoval } from "@/lib/cards/bulk";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type LinkState = { error: string | null; link: string | null; email: string | null };
@@ -91,8 +91,11 @@ export async function createPasswordLink(_prev: LinkState, formData: FormData): 
 
 export type AssignState = { error: string | null; assigned: number };
 
-// Asigna todas las tarjetas marcadas a un cliente en una sola operación.
-// Una tarjeta que ya tenía otro cliente cambia de dueño.
+const MIGRATION_0003 =
+  "Para que una tarjeta la vean varios clientes corre supabase/migrations/0003_shared_cards_and_card_details.sql en Supabase → SQL Editor.";
+
+// Le da acceso a un cliente a todas las tarjetas marcadas.
+// Los clientes que ya las veían las siguen viendo.
 export async function assignCards(_prev: AssignState, formData: FormData): Promise<AssignState> {
   await requireAdmin();
   const parsed = parseAssignment(formData);
@@ -101,51 +104,67 @@ export async function assignCards(_prev: AssignState, formData: FormData): Promi
   const rows = parsed.cardIds.map((cardId) => ({ user_id: parsed.userId, airwallex_card_id: cardId }));
   const { error } = await createAdminClient()
     .from("card_assignments")
-    .upsert(rows, { onConflict: "airwallex_card_id" });
-  if (error) return { error: `No se pudieron asignar las tarjetas: ${error.message}`, assigned: 0 };
+    .upsert(rows, { onConflict: "user_id,airwallex_card_id", ignoreDuplicates: true });
+  if (error) {
+    // Sin la migración 0003 no existe la regla (cliente, tarjeta) que usa el upsert.
+    const missingMigration = /on conflict|airwallex_card_id_key/i.test(error.message);
+    return {
+      error: missingMigration ? MIGRATION_0003 : `No se pudieron asignar las tarjetas: ${error.message}`,
+      assigned: 0,
+    };
+  }
 
   revalidatePath("/admin");
   return { error: null, assigned: rows.length };
 }
 
-// Les quita el dueño a todas las tarjetas marcadas.
+// Quita las tarjetas marcadas: solo al cliente elegido o, si no se eligió, a todos.
 export async function unassignCards(_prev: AssignState, formData: FormData): Promise<AssignState> {
   await requireAdmin();
-  const parsed = parseCardIds(formData);
+  const parsed = parseRemoval(formData);
   if ("error" in parsed) return { error: parsed.error, assigned: 0 };
 
-  const { error } = await createAdminClient()
-    .from("card_assignments")
-    .delete()
-    .in("airwallex_card_id", parsed.cardIds);
+  let query = createAdminClient().from("card_assignments").delete().in("airwallex_card_id", parsed.cardIds);
+  if (parsed.userId) query = query.eq("user_id", parsed.userId);
+  const { error } = await query;
   if (error) return { error: `No se pudieron quitar las tarjetas: ${error.message}`, assigned: 0 };
 
   revalidatePath("/admin");
   return { error: null, assigned: parsed.cardIds.length };
 }
 
+// Le quita una tarjeta a un cliente; los demás que la ven la siguen viendo.
 export async function unassignCard(formData: FormData) {
   await requireAdmin();
   const cardId = String(formData.get("card_id") ?? "");
-  if (!cardId) return;
+  const userId = String(formData.get("user_id") ?? "");
+  if (!cardId || !userId) return;
 
   const { error } = await createAdminClient()
     .from("card_assignments")
     .delete()
-    .eq("airwallex_card_id", cardId);
+    .eq("airwallex_card_id", cardId)
+    .eq("user_id", userId);
   if (error) throw new Error(`No se pudo quitar la tarjeta: ${error.message}`);
   revalidatePath("/admin");
 }
 
 export type PermissionState = { error: string | null };
 
-const PERMISSION_COLUMN = { balance: "show_balance", transactions: "show_transactions" } as const;
+const PERMISSION_COLUMN = {
+  balance: "show_balance",
+  transactions: "show_transactions",
+  card_details: "show_card_details",
+} as const;
 
-// Prende o apaga lo que un cliente puede ver: su saldo o sus movimientos.
+const readPermission = (value: FormDataEntryValue | null): keyof typeof PERMISSION_COLUMN =>
+  value === "balance" || value === "card_details" ? value : "transactions";
+
+// Prende o apaga lo que un cliente puede ver: su saldo, sus movimientos o los datos de la tarjeta.
 export async function setPermission(_prev: PermissionState, formData: FormData): Promise<PermissionState> {
   await requireAdmin();
   const userId = String(formData.get("user_id") ?? "");
-  const which = formData.get("permission") === "balance" ? "balance" : "transactions";
+  const which = readPermission(formData.get("permission"));
   const value = formData.get("value") === "true";
   if (!userId) return { error: "Falta el cliente." };
 
@@ -154,10 +173,14 @@ export async function setPermission(_prev: PermissionState, formData: FormData):
     .update({ [PERMISSION_COLUMN[which]]: value })
     .eq("id", userId);
   if (error) {
-    const missingColumn = /show_balance/.test(error.message);
+    const migration = /show_card_details/.test(error.message)
+      ? "0003_shared_cards_and_card_details.sql"
+      : /show_balance/.test(error.message)
+        ? "0002_show_balance.sql"
+        : null;
     return {
-      error: missingColumn
-        ? "Para separar el saldo corre supabase/migrations/0002_show_balance.sql en Supabase → SQL Editor."
+      error: migration
+        ? `Para usar este permiso corre supabase/migrations/${migration} en Supabase → SQL Editor.`
         : `No se pudo cambiar el ajuste: ${error.message}`,
     };
   }

@@ -3,7 +3,8 @@
 import { AirwallexError, getIssuing } from "@/lib/airwallex";
 import { requireUser } from "@/lib/auth";
 import { formatCardNumber, formatExpiry } from "@/lib/cards/format";
-import { userOwnsCard } from "@/lib/data";
+import { getMyProfile, userOwnsCard } from "@/lib/data";
+import { permissionsOf } from "@/lib/permissions";
 
 // Sin el nombre impreso en la tarjeta: es el de la empresa emisora y no se le muestra al cliente.
 export type RevealedDetails = { number: string; cvv: string; expiry: string };
@@ -15,6 +16,10 @@ export async function revealCardDetails(cardId: string): Promise<RevealResult> {
   const user = await requireUser();
   if (!(await userOwnsCard(user.id, cardId))) {
     return { ok: false, message: "Esta tarjeta no está asignada a tu cuenta." };
+  }
+  // El admin puede dejar que vea saldo y movimientos pero no el número completo ni el CVV.
+  if (!permissionsOf(await getMyProfile(user.id)).cardDetails) {
+    return { ok: false, message: "Solo puedes ver la terminación de esta tarjeta." };
   }
 
   try {

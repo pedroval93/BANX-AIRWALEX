@@ -14,9 +14,11 @@ export type Profile = {
   show_transactions: boolean;
   /** No existe hasta correr la migración 0002. */
   show_balance?: boolean | null;
+  /** No existe hasta correr la migración 0003. */
+  show_card_details?: boolean | null;
 };
 
-// "*" y no una lista de columnas: así no falla si todavía no existe show_balance.
+// "*" y no una lista de columnas: así no falla si todavía no existen las columnas nuevas.
 const PROFILE_COLUMNS = "*";
 
 // --- Datos del cliente (con su sesión: RLS solo deja ver lo suyo) ---
@@ -79,6 +81,7 @@ export async function listClients(): Promise<ClientRow[]> {
       full_name: p.full_name,
       show_transactions: p.show_transactions,
       show_balance: p.show_balance,
+      show_card_details: p.show_card_details,
       lastSignInAt: authUser?.last_sign_in_at ?? null,
       invited: !authUser?.last_sign_in_at,
       cardIds: assignments.data.filter((a) => a.user_id === p.id).map((a) => a.airwallex_card_id),

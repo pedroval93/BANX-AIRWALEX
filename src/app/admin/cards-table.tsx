@@ -5,6 +5,7 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { CardMini } from "@/components/card-faces";
 import { Button, LimitBar, Select, StatusChip } from "@/components/ui";
 import type { CardStatus } from "@/lib/airwallex/types";
+import { ownersLabel } from "@/lib/cards/access";
 import { matchesQuery } from "@/lib/cards/bulk";
 import { formatAmount } from "@/lib/cards/format";
 import type { LimitUsage } from "@/lib/cards/limits";
@@ -16,7 +17,8 @@ export type CardRow = {
   name: string;
   last4: string;
   status: CardStatus | undefined;
-  clientId: string | null;
+  /** Los clientes que ven la tarjeta; puede ser más de uno. */
+  clientIds: string[];
   spend: SpendSummary[];
   limit: LimitUsage | null;
 };
@@ -71,14 +73,18 @@ export function CardsTable({
     const result = await assignCards(prev, fd);
     if (!result.error) {
       const who = clientLabel.get(String(fd.get("user_id"))) ?? "el cliente";
-      done(`Asignaste ${plural(result.assigned, "tarjeta", "tarjetas")} a ${who}.`);
+      done(`${who} ya puede ver ${plural(result.assigned, "tarjeta", "tarjetas")}.`);
     }
     return result;
   }, initial);
 
   const [unassignState, unassignAction, unassigning] = useActionState(async (prev: AssignState, fd: FormData) => {
     const result = await unassignCards(prev, fd);
-    if (!result.error) done(`Quitaste el dueño de ${plural(result.assigned, "tarjeta", "tarjetas")}.`);
+    if (!result.error) {
+      const cards = plural(result.assigned, "tarjeta", "tarjetas");
+      const who = clientLabel.get(String(fd.get("user_id")));
+      done(who ? `${who} ya no ve ${cards}.` : `Nadie ve ya ${cards}.`);
+    }
     return result;
   }, initial);
 
@@ -92,9 +98,11 @@ export function CardsTable({
     () =>
       rows.filter((row) => {
         if (!statusMatches(status, row.status)) return false;
-        if (owner === "none" && row.clientId) return false;
-        if (owner !== "all" && owner !== "none" && row.clientId !== owner) return false;
-        const who = row.clientId ? (clientLabel.get(row.clientId) ?? "") : "sin asignar";
+        if (owner === "none" && row.clientIds.length > 0) return false;
+        if (owner !== "all" && owner !== "none" && !row.clientIds.includes(owner)) return false;
+        const who = row.clientIds.length
+          ? row.clientIds.map((id) => clientLabel.get(id) ?? "").join(" ")
+          : "sin asignar";
         return matchesQuery(`${row.name} ${row.last4} ${who}`, query);
       }),
     [rows, status, owner, query, clientLabel],
@@ -259,9 +267,9 @@ export function CardsTable({
                         </span>
                       </span>
                     </td>
-                    <td className="px-3 py-3">
-                      {row.clientId ? (
-                        <span className="font-medium">{clientLabel.get(row.clientId) ?? "Cliente"}</span>
+                    <td className="max-w-64 px-3 py-3">
+                      {row.clientIds.length ? (
+                        <ClientNames names={row.clientIds.map((id) => clientLabel.get(id) ?? "Cliente")} />
                       ) : (
                         <span className="text-muted">Sin asignar</span>
                       )}
@@ -294,7 +302,7 @@ export function CardsTable({
             {plural(selectedIds.length, "marcada", "marcadas")}
           </p>
           <label className="sr-only" htmlFor="bulk-target">
-            Asignar a
+            Cliente
           </label>
           <select
             id="bulk-target"
@@ -303,7 +311,7 @@ export function CardsTable({
             onChange={(e) => setTarget(e.target.value)}
             className="min-h-11 min-w-0 flex-1 basis-48 cursor-pointer rounded-lg border border-white/20 bg-white/10 px-3 text-sm text-white outline-none focus:border-accent [&>option]:text-[#2f3b3b]"
           >
-            <option value="">Asignar a…</option>
+            <option value="">Elige un cliente…</option>
             {clients.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.label}
@@ -311,7 +319,7 @@ export function CardsTable({
             ))}
           </select>
           <Button type="submit" formAction={assignAction} disabled={busy || !target}>
-            {assigning ? "Asignando…" : "Asignar"}
+            {assigning ? "Dando acceso…" : "Dar acceso"}
           </Button>
           <Button
             type="submit"
@@ -321,7 +329,7 @@ export function CardsTable({
             className="text-white hover:bg-white/10"
           >
             <UserRoundMinus aria-hidden className="size-4" />
-            {unassigning ? "Quitando…" : "Quitar dueño"}
+            {unassigning ? "Quitando…" : target ? "Quitar acceso" : "Quitar a todos"}
           </Button>
           <button
             type="button"
@@ -348,5 +356,15 @@ export function CardsTable({
         {toast}
       </div>
     </form>
+  );
+}
+
+/** Uno o dos nombres completos; si son más, "y N más" con la lista entera al pasar el mouse. */
+function ClientNames({ names }: { names: string[] }) {
+  const label = ownersLabel(names);
+  return (
+    <span className="block truncate font-medium" title={names.length > 2 ? names.join(", ") : undefined}>
+      {label}
+    </span>
   );
 }

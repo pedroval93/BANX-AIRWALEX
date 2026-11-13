@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchesQuery, parseAssignment, parseCardIds } from "./bulk";
+import { matchesQuery, parseAssignment, parseCardIds, parseRemoval } from "./bulk";
 
 function form(entries: [string, string][]) {
   const data = new FormData();
@@ -75,5 +75,27 @@ describe("matchesQuery", () => {
   it("needs every word of the search, in any order", () => {
     expect(matchesQuery("TikTok Test 0001 8425", "8425 tiktok")).toBe(true);
     expect(matchesQuery("TikTok Test 0001 8425", "tiktok 9999")).toBe(false);
+  });
+});
+
+describe("parseRemoval", () => {
+  it("removes only the chosen client from the marked cards", () => {
+    expect(
+      parseRemoval(
+        form([
+          ["user_id", "user-1"],
+          ["card_id", "a"],
+          ["card_id", "b"],
+        ]),
+      ),
+    ).toEqual({ userId: "user-1", cardIds: ["a", "b"] });
+  });
+
+  it("removes everyone when no client is chosen", () => {
+    expect(parseRemoval(form([["user_id", ""], ["card_id", "a"]]))).toEqual({ userId: null, cardIds: ["a"] });
+  });
+
+  it("asks for at least one card", () => {
+    expect(parseRemoval(form([["user_id", "user-1"]]))).toEqual({ error: "Marca al menos una tarjeta." });
   });
 });

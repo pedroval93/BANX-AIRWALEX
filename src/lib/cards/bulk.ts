@@ -32,6 +32,19 @@ export function parseCardIds(formData: FormData): { cardIds: string[] } | { erro
   return { cardIds };
 }
 
+/**
+ * Lee a quién quitarle las tarjetas marcadas.
+ * Con cliente: solo a ese cliente. Sin cliente (userId null): a todos los que las ven.
+ */
+export function parseRemoval(
+  formData: FormData,
+): { userId: string | null; cardIds: string[] } | { error: string } {
+  const parsed = parseCardIds(formData);
+  if ("error" in parsed) return parsed;
+  const userId = String(formData.get("user_id") ?? "").trim() || null;
+  return { userId, cardIds: parsed.cardIds };
+}
+
 function normalize(text: string) {
   return text
     .normalize("NFD")

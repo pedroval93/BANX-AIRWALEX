@@ -5,7 +5,7 @@ import { setPermission, type PermissionState } from "./actions";
 
 const initial: PermissionState = { error: null };
 
-/** Interruptor de "ve su saldo" / "ve sus movimientos". Cambia al instante y se guarda en el servidor. */
+/** Interruptor de "ve su saldo" / "ve sus movimientos" / "ve los datos de tarjeta". Cambia al instante y se guarda en el servidor. */
 export function PermissionSwitch({
   userId,
   permission,
@@ -13,7 +13,7 @@ export function PermissionSwitch({
   label,
 }: {
   userId: string;
-  permission: "balance" | "transactions";
+  permission: "balance" | "transactions" | "card_details";
   on: boolean;
   label: string;
 }) {

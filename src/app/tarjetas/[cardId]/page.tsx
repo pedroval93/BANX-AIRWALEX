@@ -84,8 +84,11 @@ export default async function CardPage({ params, searchParams }: PageProps<"/tar
               nickname={card.nick_name || "Tarjeta"}
               brand={card.brand}
               maskedNumber={maskedCardNumber(card.card_number)}
-              canReveal={status === "ACTIVE"}
+              canReveal={status === "ACTIVE" && can.cardDetails}
             />
+            {can.cardDetails ? null : (
+              <p className="mt-3 text-sm text-muted">Solo puedes ver la terminación de esta tarjeta.</p>
+            )}
           </div>
 
           {showMonth ? (

@@ -12,7 +12,7 @@ create table if not exists public.profiles (
 );
 
 -- Qué tarjeta de Airwallex tiene asignada cada cliente.
--- Una tarjeta pertenece a un solo cliente.
+-- 0003_shared_cards_and_card_details.sql cambia esto para que una tarjeta la vean varios clientes.
 create table if not exists public.card_assignments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles (id) on delete cascade,
